@@ -40,8 +40,8 @@ app.get("/", (req, res) => {
 });
 
 app.get("/secrets", (req, res) => {
-  console.log(req.user);
-  if (req.isAuthenticated) {
+  if (req.isAuthenticated()) {
+    console.log(req.user);
     console.log("User is authenticated!");
     res.render("secrets.ejs");
   } else {
