@@ -3,6 +3,7 @@ import bodyParser from "body-parser";
 import pg from "pg";
 import "dotenv/config";
 import bcrypt from "bcrypt";
+import session from "express-session";
 
 const db = new pg.Client({
   user: process.env.DB_USER,
@@ -20,6 +21,12 @@ const saltRounds = 10;
 
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static("public"));
+app.use(session({
+  secret: 'TopSecret',
+  resave: false,
+  saveUninitialized: true
+}
+))
 
 app.get("/", (req, res) => {
   res.render("home.ejs");
