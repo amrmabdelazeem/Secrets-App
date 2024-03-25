@@ -14,3 +14,13 @@ body {
   color: #fff;
   background-color: #000;
 }
+
+.error{
+  color: red;
+  margin-left: 1rem;
+}
+
+.success{
+  color: green;
+  margin-left: 1rem;
+}
