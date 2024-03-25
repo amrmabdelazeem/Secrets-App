@@ -5,6 +5,7 @@ import "dotenv/config";
 import bcrypt from "bcrypt";
 import session from "express-session";
 import passport from "passport";
+import { Strategy } from "passport-local";
 
 const db = new pg.Client({
   user: process.env.DB_USER,
@@ -23,18 +24,29 @@ const saltRounds = 10;
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static("public"));
 
-app.use(session({
-  secret: 'TopSecret',
-  resave: false,
-  saveUninitialized: true
-}
-));
+app.use(
+  session({
+    secret: "TopSecret",
+    resave: false,
+    saveUninitialized: true,
+  })
+);
 
 app.use(passport.initialize());
 app.use(passport.session());
 
 app.get("/", (req, res) => {
   res.render("home.ejs");
+});
+
+app.get("/secrets", (req, res) => {
+  console.log(req.user);
+  if (req.isAuthenticated) {
+    console.log("User is authenticated!");
+    res.render("secrets.ejs");
+  } else {
+    res.redirect("/login");
+  }
 });
 
 app.get("/login", (req, res) => {
@@ -52,7 +64,7 @@ app.post("/register", async (req, res) => {
   try {
     const checkEmail = await db.query("SELECT * FROM  users WHERE email=$1", [email]);
     if (checkEmail.rowCount > 0) {
-      res.render("register.ejs", { error });
+      res.render("register.ejs");
     } else {
       bcrypt.hash(password, saltRounds, async (err, hash) => {
         if (err) {
@@ -63,49 +75,59 @@ app.post("/register", async (req, res) => {
             [email, hash]
           );
           console.log("Successfully Added new user to DATABASE!");
-          console.log(result.rows[0].email);
-          const registeredEmail = result.rows[0].email;
-          res.render("register.ejs", { registeredEmail });
+          const user = result.rows;
+          req.login(user, (err)=>{
+            console.log(err);
+            res.redirect("/secrets");
+          })
         }
       });
     }
   } catch (error) {
     console.log(error.message);
-    res.render("register.ejs", { error });
+    res.render("register.ejs");
   }
 });
-const errorMessage = "Login credintials are wrong, Try again!";
 
-app.post("/login", async (req, res) => {
-  const email = req.body.username;
-  const loginPassword = req.body.password;
-  try {
-    const result = await db.query("SELECT * FROM users where  email=$1", [email]);
+app.post(
+  "/login",
+  passport.authenticate("local", { successRedirect: "/secrets", failureRedirect: "/login" })
+);
 
-    if (result.rowCount === 0) {
-      res.render("login.ejs", { message: "Email is not registered. Please Register first." });
-    } else {
-      const storedHashedPassword = result.rows[0].password;
-      bcrypt.compare(loginPassword, storedHashedPassword, (err, result) => {
-        if (err) {
-          console.log("Error comparing passwords", err);
-          res.render("login.ejs", { message: errorMessage });
-        } else {
-          if (!result) {
-            res.render("login.ejs", { message: errorMessage });
-            console.log(result);
+passport.use(
+  new Strategy(async function verify(username, password, cb) {
+    try {
+      const result = await db.query("SELECT * FROM users where  email=$1", [username]);
+
+      if (result.rowCount === 0) {
+        res.render("login.ejs", { message: "Email is not registered. Please Register first." });
+      } else {
+        const storedHashedPassword = result.rows[0].password;
+        bcrypt.compare(password, storedHashedPassword, (err, result) => {
+          if (err) {
+            return cb(err);
           } else {
-            console.log("Sucessfully Logged In!");
-            console.log(result);
-            res.render("secrets.ejs");
+            if (!result) {
+              return cb(null, false);
+            } else {
+              console.log("Sucessfully Logged In!");
+              return cb(null, username);
+            }
           }
-        }
-      });
+        });
+      }
+    } catch (error) {
+      return cb("user not found");
     }
-  } catch (error) {
-    console.log(error.message);
-    res.render("login.ejs", { error });
-  }
+  })
+);
+
+passport.serializeUser((user, cb) => {
+  cb(null, user);
+});
+
+passport.deserializeUser((user, cb) => {
+  cb(null, user);
 });
 
 app.listen(port, () => {
